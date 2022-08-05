@@ -107,7 +107,12 @@
     function parse_child(child) {
 
         if (child.type === "edge_stmt") {
-            links_data.push({"source": child.edge_list[0].id, "target": child.edge_list[1].id});
+            var link_obj = {"source": child.edge_list[0].id, "target": child.edge_list[1].id}
+
+            child.attr_list.forEach(function (attr) {
+                link_obj[attr.id] = attr.eq;
+            });
+            links_data.push(link_obj);
         }
         if (child.type === "node_stmt") {
             var node_object = {"id": child.node_id.id, "type": "dependency", "name": child.node_id.id};
@@ -115,22 +120,18 @@
                 node_object[attr.id] = attr.eq;
             });
             nodes_data.push(node_object);
-            console.log(child);
         }
     }
 
 
     function parse() {
         parsed_graph = DotParser.parse(document.querySelector('#jsoninput').value);
-        console.log(parsed_graph);
 
         var statusField = document.getElementById("status");
         statusField.textContent = "Success";
         nodes_data = [];
         links_data = [];
         parsed_graph.children.forEach(parse_child);
-        console.log(links_data);
-        console.log(nodes_data);
 
         populate();
     }
@@ -155,11 +156,11 @@
                 return d.id;
             })
             //.distance(400)
-            .strength(.1);
+            .strength(.05);
 
 
         charge_force = d3.forceManyBody()
-            .strength(-1200);
+            .strength(-3200);
 
         center_force = d3.forceCenter(width / 2, height / 2);
 
@@ -234,19 +235,10 @@
             })
             .style("opacity", 1);
 
-        text_elm_type = states.append("text")
-            .text(function (d) {
-                return capitalizeFirstLetter(d.type)
-            })
-            .attr("y", "1em")
-            .attr("x", "10")
-            .attr("font-size", "1.1em")
-            .attr("font-weight", "bold")
-            .attr("class", "name");
 
         text_elm_name = states.append("text")
             .text(function (d) {
-                return d.name
+                return d.label
             })
             .attr("y", "2.1em")
             .attr("x", "15")
@@ -273,7 +265,7 @@
                 tooltip.transition()
                     .duration(10)
                     .style("opacity", .9);
-                tooltip.html("<b>Filter</b></br>" + d.filter)
+                tooltip.html("<b>ID</b></br>" + d.id)
                     .style("left", (d3.event.pageX) + "px")
                     .style("top", (d3.event.pageY - 28) + "px");
                 current_node = d;
@@ -330,9 +322,9 @@
     function highlight_lines(line) {
         if (line.source === current_node || line.target === current_node) {
             if (line.source === current_node) {
-                $("#" + line.target.id).attr("fill", selected_node);
+                $(line.target.id).attr("fill", selected_node);
             } else {
-                $("#" + line.source.id).attr("fill", selected_node);
+                $(line.source.id).attr("fill", selected_node);
             }
             return selected_link;
 
@@ -351,7 +343,7 @@
     }
 
     function set_width(d) {
-        d.width = Math.max(d.name.length * 7.2 + 30, 100);
+        d.width = Math.max(d.label.length * 7.2 + 30, 100);
         return d.width;
     }
 
@@ -361,8 +353,6 @@
 
 
     //Function to choose the line colour and thickness
-    //If the link type is "A" return green
-    //If the link type is "E" return red
     function linkColour(d) {
         return unselected_link;
     }
