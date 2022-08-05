@@ -7,17 +7,13 @@
         stroke-opacity: 0.6;
     }
 
-    .state circle {
+    .dependency circle {
         stroke: black;
         stroke-width: 0px;
     }
 
-    .transition rect {
-        stroke: black;
-        stroke-width: 0px;
-    }
 
-    svg.state, svg.transition {
+    svg.dependency {
         overflow: visible;
     }
 </style>
@@ -29,7 +25,7 @@
 <div>
     <div><span>Nix dependency GraphVis</span></div>
     <div><span>Generate with: <span style="background:black; color:white; padding-left:20px;">$ nix-store -q --graph /nix/store/{root package}</span></span></div>
-    <textarea cols="50" id="jsoninput" rows="20">digraph  G {a -> b; a -> C}</textarea>
+    <textarea cols="50" id="jsoninput" rows="20">digraph  G {a -> b; a -> x; a -> C; C -> d}</textarea>
 </div>
 <div>
     <button onclick="parse()">
@@ -73,6 +69,8 @@
     var width = $("#graphholder").width();
     var height = 1000;
 
+    var parsed_graph = {};
+
     var radius = 15;
     var state_width = 50;
     var state_height = 55;
@@ -84,7 +82,6 @@
     var links_data = [];
 
     var states = null;
-    var trans = null;
     var links = null;
 
     var g = null;
@@ -99,41 +96,45 @@
     var selected_node = "coral";
     var unselected_node = "aqua";
 
-    var selected_tran = "orange";
-    var unselected_tran = "yellow";
-
 
     var selected_link = "chocolate";
     var unselected_link = "green";
 
+    function parse_child(child) {
+
+        if (child.type === "edge_stmt") {
+            links_data.push({"source": child.edge_list[0].id, "target": child.edge_list[1].id});
+            child.edge_list.forEach(function (node) {
+                var node_object = {"id": node.id, "type": "state"};
+                // if ((nodes_data.some(e => e.id === node_object.id)) === false) {
+                //     nodes_data.push(node_object);
+                // }
+            })
+        }
+        if (child.type === "node_stmt") {
+            var node_object = {"id": child.node_id.id, "type": "dependency", "name": child.node_id.id};
+            child.attr_list.forEach(function (attr) {
+                node_object[attr.id] = attr.eq;
+            });
+            nodes_data.push(node_object);
+            console.log(child);
+        }
+    }
+
 
     function parse() {
-        window.ast = DotParser.parse(document.querySelector('textarea').value);
-        console.log(ast);
+        parsed_graph = DotParser.parse(document.querySelector('#jsoninput').value);
+        console.log(parsed_graph);
 
-
-        var jsoninput = document.getElementById("jsoninput");
         var statusField = document.getElementById("status");
-        d3.select("#graphview").graphviz()
-            .dot(jsoninput.value).render();
-        // var json_contents = JSON.parse(jsoninput.value);
-        // statusField.textContent = "Success";
-        // nodes_data = [];
-        // links_data = [];
-        // json_contents["states"].forEach(function (state) {
-        //     nodes_data.push(state)
-        //     state["transitionIds"].forEach(function (tid) {
-        //         links_data.push({"source": state.id, "target": tid})
-        //     })
-        // })
-        // json_contents["transitions"].forEach(function (t) {
-        //     nodes_data.push(t)
-        //     links_data.push({"source": t.id, "target": t.endpointId})
-        // })
-        //
-        //
-        // //catch (exeption_var) { statusField.textContent = exeption_var; }
-        // populate();
+        statusField.textContent = "Success";
+        nodes_data = [];
+        links_data = [];
+        parsed_graph.children.forEach(parse_child);
+        console.log(links_data);
+        console.log(nodes_data);
+
+        populate();
     }
 
     var simulation = null;
@@ -288,8 +289,7 @@
                     .duration(500)
                     .style("opacity", 0);
 
-                $(".state rect").attr("fill", unselected_node);
-                $(".transition rect").attr("fill", unselected_tran);
+                $(".dependency rect").attr("fill", unselected_node);
                 $("line").css("stroke", unselected_link);
             });
 
@@ -321,14 +321,8 @@
 
     /** Functions **/
 
-    //Function to choose what color circle we have
-    //Let's return blue for males and red for females
     function circleColour(d) {
-        if (d.type == "state") {
-            return unselected_node;
-        } else {
-            return unselected_tran;
-        }
+        return unselected_node;
     }
 
     function capitalizeFirstLetter(string) {
@@ -351,7 +345,7 @@
 
 
     function set_title(d) {
-        return d.name;
+        return d.label;
     }
 
     function set_height(d) {
