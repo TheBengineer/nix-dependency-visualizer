@@ -105,7 +105,7 @@
     });
 
     function fix_nix_id(id) {
-        var parsed_id = /(?<=\/)[^/\.]+(?=\.[^/]*$)/.exec(id)
+        let parsed_id = /(?<=\/)[^/\.]+(?=\.[^/]*$)/.exec(id)
         if (parsed_id != null) {
             return parsed_id[0];
         } else {
@@ -113,22 +113,40 @@
         }
     }
 
+    function nix_id_to_label(id) {
+        return /-[a-z-0-9.]+/.exec(id)[0];
+    }
+
     function parse_child(child) {
 
         if (child.type === "edge_stmt") {
-            var link_obj = {"source": fix_nix_id(child.edge_list[0].id), "target": fix_nix_id(child.edge_list[1].id)}
+            let link_obj = {"source": fix_nix_id(child.edge_list[0].id), "target": fix_nix_id(child.edge_list[1].id)}
 
             child.attr_list.forEach(function (attr) {
                 link_obj[attr.id] = attr.eq;
             });
             links_data.push(link_obj);
+            child.edge_list.forEach(function (node) {
+                const fixed_id = fix_nix_id(node.id);
+                if ((nodes_data.some(e => e.id === fixed_id)) === false) {
+                    nodes_data.push({"id": fixed_id, "type": "dependency", "name": node.id, "label": nix_id_to_label(node.id)});
+                }
+            });
+
         }
         if (child.type === "node_stmt") {
-            var node_object = {"id": fix_nix_id(child.node_id.id), "type": "dependency", "name": child.node_id.id};
+
+            const fixed_id = fix_nix_id(child.node_id.id);
+            if ((nodes_data.some(e => e.id === fixed_id)) === false) {
+                nodes_data.push({"id": fixed_id, "type": "dependency", "name": child.node_id.id, "label": nix_id_to_label(child.node_id.id)});
+            }
+            const index = nodes_data.map(function (x) {
+                return x.id;
+            }).indexOf(fixed_id);
+
             child.attr_list.forEach(function (attr) {
-                node_object[attr.id] = attr.eq;
+                nodes_data[index][attr.id] = attr.eq;
             });
-            nodes_data.push(node_object);
         }
     }
 
