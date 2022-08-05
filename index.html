@@ -2,392 +2,441 @@
 <meta charset="utf-8">
 <style>
     .link line, #arrow polygon {
-   stroke: green;
-   fill: green;
-   stroke-opacity: 0.6;
-   }
-   .state circle {
-   stroke: black;
-   stroke-width: 0px;
-   }
-   .transition rect {
-   stroke: black;
-   stroke-width: 0px;
-   }
+        stroke: green;
+        fill: green;
+        stroke-opacity: 0.6;
+    }
 
-   svg.state, svg.transition {
-    overflow:visible;
-   }
+    .state circle {
+        stroke: black;
+        stroke-width: 0px;
+    }
+
+    .transition rect {
+        stroke: black;
+        stroke-width: 0px;
+    }
+
+    svg.state, svg.transition {
+        overflow: visible;
+    }
 </style>
 
 <body height="100%" width="100%">
-    <div class="tooltip">
-    </div>
-    <div>
-        <div><span>Json to parse</span></div>
-        <textarea cols="50" id="jsoninput" rows="20">{}</textarea>
-    </div>
-    <div>
-        <button onclick="parse()">
-            Convert to map
-        </button>
-        <span id="status">
+
+<div class="tooltip">
+</div>
+<div>
+    <div><span>Nix dependency GraphVis</span></div>
+    <div><span>Generate with: <span style="background:black; color:white; padding-left:20px;">$ nix-store -q --graph /nix/store/{root package}</span></span></div>
+    <textarea cols="50" id="jsoninput" rows="20">digraph  G {a -> b; a -> C}</textarea>
+</div>
+<div>
+    <button onclick="parse()">
+        Convert to map
+    </button>
+    <span id="status">
         </span>
-    </div>
-    <p>
-        <div style="outline:solid;" id="graphholder">
-            <svg id="graphview" height="1000" width="100%">
-                <defs>
-                    <marker id="arrow" markerWidth="20" markerHeight="7" refX="15" refY="3.5" orient="auto">
-                        <polygon points="0 0, 10 3.5, 0 7" />
-                    </marker>
-                </defs>
-            </svg>
-        </div>
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" type="text/javascript"></script>
-        <script src="https://d3js.org/d3.v4.min.js"></script>
-        <style>
-        div.tooltip {
-            position: absolute;
-            text-align: center;
-            width: 200px;
-            height: auto;
-            padding: 2px;
-            font: 10px sans-serif;
-            background: lightsteelblue;
-            border: 0px;
-            border-radius: 8px;
-            pointer-events: none;
-        }
-        </style>
-        <script>
-        //create somewhere to put the force directed graph
+</div>
+<p>
+<div style="outline:solid;" id="graphholder">
+    <svg id="graphview" height="1000" width="100%">
+        <defs>
+            <marker id="arrow" markerWidth="20" markerHeight="7" refX="15" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7"/>
+            </marker>
+        </defs>
+    </svg>
+</div>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" type="text/javascript"></script>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script src="data/dotparser.js"></script>
+<style>
+    div.tooltip {
+        position: absolute;
+        text-align: center;
+        width: 200px;
+        height: auto;
+        padding: 2px;
+        font: 10px sans-serif;
+        background: lightsteelblue;
+        border: 0px;
+        border-radius: 8px;
+        pointer-events: none;
+    }
+</style>
+<script>
+    //create somewhere to put the force directed graph
 
 
+    var svg = d3.select("#graphview");
+    var width = $("#graphholder").width();
+    var height = 1000;
 
-        var svg = d3.select("#graphview");
-        var width = $("#graphholder").width();
-        var height = 1000;
-
-        var radius = 15;
-        var state_width = 50;
-        var state_height = 55;
-        var half_width = state_width / 2;
-        var half_height = state_height / 2;
-
-
-        var nodes_data = [];
-        var links_data = [];
-
-        var states = null;
-        var trans = null;
-        var links = null;
-
-        var g = null;
-        var tooltip = null;
-
-        var current_node = null;
-
-        var link_force = null;
-        var charge_force = null;
-        var center_force = null;
-
-        var selected_node = "coral";
-        var unselected_node = "aqua";
-
-        var selected_tran = "orange";
-        var unselected_tran = "yellow";
+    var radius = 15;
+    var state_width = 50;
+    var state_height = 55;
+    var half_width = state_width / 2;
+    var half_height = state_height / 2;
 
 
-        var selected_link = "chocolate";
-        var unselected_link = "green";
+    var nodes_data = [];
+    var links_data = [];
+
+    var states = null;
+    var trans = null;
+    var links = null;
+
+    var g = null;
+    var tooltip = null;
+
+    var current_node = null;
+
+    var link_force = null;
+    var charge_force = null;
+    var center_force = null;
+
+    var selected_node = "coral";
+    var unselected_node = "aqua";
+
+    var selected_tran = "orange";
+    var unselected_tran = "yellow";
 
 
-        $("#jsoninput").load("data/cer.json", function() { parse(); });
+    var selected_link = "chocolate";
+    var unselected_link = "green";
 
-        function parse() {
-            var jsoninput = document.getElementById("jsoninput");
-            var statusField = document.getElementById("status");
-            var json_contents = JSON.parse(jsoninput.value);
-            statusField.textContent = "Success";
-            nodes_data = [];
-            links_data = [];
-            json_contents["states"].forEach(function(state) {
-                nodes_data.push(state)
-                state["transitionIds"].forEach(function(tid) {
-                    links_data.push({ "source": state.id, "target": tid })
-                })
+
+    function parse() {
+        window.ast = DotParser.parse(document.querySelector('textarea').value);
+        console.log(ast);
+
+
+        var jsoninput = document.getElementById("jsoninput");
+        var statusField = document.getElementById("status");
+        d3.select("#graphview").graphviz()
+            .dot(jsoninput.value).render();
+        // var json_contents = JSON.parse(jsoninput.value);
+        // statusField.textContent = "Success";
+        // nodes_data = [];
+        // links_data = [];
+        // json_contents["states"].forEach(function (state) {
+        //     nodes_data.push(state)
+        //     state["transitionIds"].forEach(function (tid) {
+        //         links_data.push({"source": state.id, "target": tid})
+        //     })
+        // })
+        // json_contents["transitions"].forEach(function (t) {
+        //     nodes_data.push(t)
+        //     links_data.push({"source": t.id, "target": t.endpointId})
+        // })
+        //
+        //
+        // //catch (exeption_var) { statusField.textContent = exeption_var; }
+        // populate();
+    }
+
+    var simulation = null;
+
+    function populate() {
+        //set up the simulation and add forces
+        d3.select("#graphview").selectAll("text").remove();
+        d3.select("#graphview").selectAll("rect").remove();
+        d3.select("#graphview").selectAll("line").remove();
+        d3.select("#graphview").selectAll("svg").remove();
+        d3.select("#graphview").selectAll("g").remove();
+
+
+        simulation = d3.forceSimulation()
+            .nodes(nodes_data);
+
+
+        link_force = d3.forceLink(links_data)
+            .id(function (d) {
+                return d.id;
             })
-            json_contents["transitions"].forEach(function(t) {
-                nodes_data.push(t)
-                links_data.push({ "source": t.id, "target": t.endpointId })
+            //.distance(400)
+            .strength(.1);
+
+
+        charge_force = d3.forceManyBody()
+            .strength(-1200);
+
+        center_force = d3.forceCenter(width / 2, height / 2);
+
+        simulation
+            .force("charge_force", charge_force)
+            .force("center_force", center_force)
+            .force("links", link_force);
+
+
+        //add tick instructions:
+        simulation.on("tick", tickActions);
+
+        //add encompassing group for the zoom
+        g = svg.append("g")
+            .attr("class", "everything");
+        //.attr("transform", "translate(100,50) scale(.7,.7)");
+
+        tooltip = d3.select("div.tooltip")
+            .style("opacity", 0);
+
+
+        //draw lines for the links
+        links = g.append("g")
+            .selectAll("line")
+            .data(links_data)
+            .enter().append("line")
+            .attr("stroke-width", 2)
+            .style("stroke", linkColour)
+            .style("opacity", 1)
+            .attr("value", function (d) {
+                return d.value
             })
+            .attr("class", "link")
+            .attr("marker-end", "url(#arrow)");
+
+        // draw the state and transission elements
+        states = g.append("g")
+            .selectAll("rect")
+            .data(nodes_data)
+            .enter()
+            .append("svg")
+            .attr("class", function (d) {
+                return d.type
+            })
+            .attr("id", function (d) {
+                return d.id
+            });
+
+        left_dot = states.append("line")
+            .attr("x1", 0)
+            .attr("y1", state_height / 2)
+            .attr("x2", -7)
+            .attr("y2", state_height / 2)
+            .attr("class", "leftdot")
+            .attr("stroke-width", 3);
+
+        right_dot = states.append("line")
+            .attr("x1", set_width)
+            .attr("y1", state_height / 2)
+            .attr("x2", set_dot_width)
+            .attr("y2", state_height / 2)
+            .attr("class", "leftdot")
+            .attr("stroke-width", 3);
+
+        states_elm = states.append("rect")
+            .attr("width", set_width)
+            .attr("height", set_height)
+            .attr("fill", circleColour)
+            .attr("title", set_title)
+            .attr("class", function (d) {
+                return d.type
+            })
+            .style("opacity", 1);
+
+        text_elm_type = states.append("text")
+            .text(function (d) {
+                return capitalizeFirstLetter(d.type)
+            })
+            .attr("y", "1em")
+            .attr("x", "10")
+            .attr("font-size", "1.1em")
+            .attr("font-weight", "bold")
+            .attr("class", "name");
+
+        text_elm_name = states.append("text")
+            .text(function (d) {
+                return d.name
+            })
+            .attr("y", "2.1em")
+            .attr("x", "15")
+            .attr("font-size", "1em")
+            .attr("class", "name");
+
+        text_elm_desc = states.append("text")
+            .text(function (d) {
+                return d.description
+            })
+            .attr("y", "4em")
+            .attr("x", "15")
+            .attr("font-size", ".7em")
+            .attr("class", "desc");
+
+        hover_elm = states.append("rect")
+            .attr("width", set_width)
+            .attr("height", set_height)
+            .attr("class", function (d) {
+                return d.type
+            })
+            .style("opacity", 0)
+            .on("mouseover", function (d) {
+                tooltip.transition()
+                    .duration(10)
+                    .style("opacity", .9);
+                tooltip.html("<b>Filter</b></br>" + d.filter)
+                    .style("left", (d3.event.pageX) + "px")
+                    .style("top", (d3.event.pageY - 28) + "px");
+                current_node = d;
+                rect_selector = ("#" + d.id + " rect").replace(":", "\\:");
+                $(rect_selector).attr("fill", selected_node);
+                g.selectAll("line").style("stroke", highlight_lines);
+
+            })
+            .on("mouseout", function (d) {
+                tooltip.transition()
+                    .duration(500)
+                    .style("opacity", 0);
+
+                $(".state rect").attr("fill", unselected_node);
+                $(".transition rect").attr("fill", unselected_tran);
+                $("line").css("stroke", unselected_link);
+            });
 
 
+        //add drag capabilities
+        var drag_handler = d3.drag()
+            .on("start", drag_start)
+            .on("drag", drag_drag)
+            .on("end", drag_end);
 
-            //catch (exeption_var) { statusField.textContent = exeption_var; }
-            populate();
+        drag_handler(states);
+
+        // var zoom = d3.zoom();
+
+        // $("#graphview")
+        //     .call(zoom.transform, d3.zoomIdentity.translate(100, 50).scale(.5))
+        //     .call(zoom.on('zoom', (event) => { svg.attr('transform', event.transform); }));
+        //add zoom capabilities
+
+        var zoom_handler = d3.zoom()
+            .on("zoom", zoom_actions);
+
+
+        zoom_handler(svg);
+    }
+
+
+    //populate();
+
+    /** Functions **/
+
+    //Function to choose what color circle we have
+    //Let's return blue for males and red for females
+    function circleColour(d) {
+        if (d.type == "state") {
+            return unselected_node;
+        } else {
+            return unselected_tran;
         }
+    }
 
-        var simulation = null;
+    function capitalizeFirstLetter(string) {
+        return string.charAt(0).toUpperCase() + string.slice(1);
+    }
 
-        function populate() {
-            //set up the simulation and add forces
-            d3.select("#graphview").selectAll("text").remove();
-            d3.select("#graphview").selectAll("rect").remove();
-            d3.select("#graphview").selectAll("line").remove();
-            d3.select("#graphview").selectAll("svg").remove();
-            d3.select("#graphview").selectAll("g").remove();
+    function highlight_lines(line) {
+        if (line.source === current_node || line.target === current_node) {
+            if (line.source === current_node) {
+                $("#" + line.target.id).attr("fill", selected_node);
+            } else {
+                $("#" + line.source.id).attr("fill", selected_node);
+            }
+            return selected_link;
 
-
-            simulation = d3.forceSimulation()
-                .nodes(nodes_data);
-
-
-            link_force = d3.forceLink(links_data)
-                .id(function(d) { return d.id; })
-                //.distance(400)
-                .strength(.1);
-
-
-            charge_force = d3.forceManyBody()
-                .strength(-1200);
-
-            center_force = d3.forceCenter(width / 2, height / 2);
-
-            simulation
-                .force("charge_force", charge_force)
-                .force("center_force", center_force)
-                .force("links", link_force);
+        } else {
+            return unselected_link
+        }
+    }
 
 
-            //add tick instructions: 
-            simulation.on("tick", tickActions);
+    function set_title(d) {
+        return d.name;
+    }
 
-            //add encompassing group for the zoom 
-            g = svg.append("g")
-                .attr("class", "everything");
-            //.attr("transform", "translate(100,50) scale(.7,.7)");
+    function set_height(d) {
+        return state_height;
+    }
 
-            tooltip = d3.select("div.tooltip")
-                .style("opacity", 0);
+    function set_width(d) {
+        d.width = Math.max(d.name.length * 7.2 + 30, 100);
+        return d.width;
+    }
+
+    function set_dot_width(d) {
+        return set_width(d) + 7;
+    }
 
 
+    //Function to choose the line colour and thickness
+    //If the link type is "A" return green
+    //If the link type is "E" return red
+    function linkColour(d) {
+        return unselected_link;
+    }
 
-            //draw lines for the links 
-            links = g.append("g")
-                .selectAll("line")
-                .data(links_data)
-                .enter().append("line")
-                .attr("stroke-width", 2)
-                .style("stroke", linkColour)
-                .style("opacity", 1)
-                .attr("value", function(d) { return d.value })
-                .attr("class", "link")
-                .attr("marker-end", "url(#arrow)");
+    //Drag functions
+    //d is the node
+    function drag_start(d) {
+        if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+    }
 
-            // draw the state and transission elements
-            states = g.append("g")
-                .selectAll("rect")
-                .data(nodes_data)
-                .enter()
-                .append("svg")
-                .attr("class", function(d) { return d.type })
-                .attr("id", function(d) { return d.id });
+    //make sure you can't drag the circle outside the box
+    function drag_drag(d) {
+        d.fx = d3.event.x;
+        d.fy = d3.event.y;
+    }
 
-            left_dot = states.append("line")
-                .attr("x1", 0)
-                .attr("y1", state_height / 2)
-                .attr("x2", -7)
-                .attr("y2", state_height / 2)
-                .attr("class", "leftdot")
-                .attr("stroke-width", 3);
+    function drag_end(d) {
+        if (!d3.event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+    }
 
-            right_dot = states.append("line")
-                .attr("x1", set_width)
-                .attr("y1", state_height / 2)
-                .attr("x2", set_dot_width)
-                .attr("y2", state_height / 2)
-                .attr("class", "leftdot")
-                .attr("stroke-width", 3);
+    //Zoom functions
+    function zoom_actions() {
+        g.attr("transform", d3.event.transform)
+    }
 
-            states_elm = states.append("rect")
-                .attr("width", set_width)
-                .attr("height", set_height)
-                .attr("fill", circleColour)
-                .attr("title", set_title)
-                .attr("class", function(d) { return d.type })
-                .style("opacity", 1);
 
-            text_elm_type = states.append("text")
-                .text(function(d) { return capitalizeFirstLetter(d.type) })
-                .attr("y", "1em")
-                .attr("x", "10")
-                .attr("font-size", "1.1em")
-                .attr("font-weight", "bold")
-                .attr("class", "name");
-
-            text_elm_name = states.append("text")
-                .text(function(d) { return d.name })
-                .attr("y", "2.1em")
-                .attr("x", "15")
-                .attr("font-size", "1em")
-                .attr("class", "name");
-
-            text_elm_desc = states.append("text")
-                .text(function(d) { return d.description })
-                .attr("y", "4em")
-                .attr("x", "15")
-                .attr("font-size", ".7em")
-                .attr("class", "desc");
-
-            hover_elm = states.append("rect")
-                .attr("width", set_width)
-                .attr("height", set_height)
-                .attr("class", function(d) { return d.type })
-                .style("opacity", 0)
-                .on("mouseover", function(d) {
-                    tooltip.transition()
-                        .duration(10)
-                        .style("opacity", .9);
-                    tooltip.html("<b>Filter</b></br>" + d.filter)
-                        .style("left", (d3.event.pageX) + "px")
-                        .style("top", (d3.event.pageY - 28) + "px");
-                    current_node = d;
-                    rect_selector = ("#" + d.id + " rect").replace(":", "\\:");
-                    $(rect_selector).attr("fill", selected_node);
-                    g.selectAll("line").style("stroke", highlight_lines);
-
+    function tickActions() {
+        //update circle positions each tick of the simulation
+        if (simulation !== null) {
+            states
+                .attr("x", function (d) {
+                    return d.x - d.width / 2;
                 })
-                .on("mouseout", function(d) {
-                    tooltip.transition()
-                        .duration(500)
-                        .style("opacity", 0);
-
-                    $(".state rect").attr("fill", unselected_node);
-                    $(".transition rect").attr("fill", unselected_tran);
-                    $("line").css("stroke", unselected_link);
+                .attr("y", function (d) {
+                    return d.y - half_height;
                 });
 
+            links
+                .attr("x1", function (d) {
+                    if (d.source.x > d.target.x) {
+                        return d.source.x - d.source.width / 2 - 7;
+                    } else {
+                        return d.source.x + d.source.width / 2 + 7;
+                    }
+                })
+                .attr("y1", function (d) {
+                    return d.source.y;
+                })
+                .attr("x2", function (d) {
+                    if (d.source.x > d.target.x) {
+                        return d.target.x + d.target.width / 2 + 7;
+                    } else {
+                        return d.target.x - d.target.width / 2 - 7;
+                    }
+                })
+                .attr("y2", function (d) {
+                    return d.target.y;
+                });
 
-            //add drag capabilities  
-            var drag_handler = d3.drag()
-                .on("start", drag_start)
-                .on("drag", drag_drag)
-                .on("end", drag_end);
-
-            drag_handler(states);
-
-            // var zoom = d3.zoom();
-
-            // $("#graphview")
-            //     .call(zoom.transform, d3.zoomIdentity.translate(100, 50).scale(.5))
-            //     .call(zoom.on('zoom', (event) => { svg.attr('transform', event.transform); }));
-            //add zoom capabilities
-
-            var zoom_handler = d3.zoom()
-                .on("zoom", zoom_actions);
-
-
-            zoom_handler(svg);
         }
-
-
-        //populate();
-
-        /** Functions **/
-
-        //Function to choose what color circle we have
-        //Let's return blue for males and red for females
-        function circleColour(d) {
-            if (d.type == "state") { return unselected_node; } else { return unselected_tran; }
-        }
-
-        function capitalizeFirstLetter(string) {
-            return string.charAt(0).toUpperCase() + string.slice(1);
-        }
-
-        function highlight_lines(line) {
-            if (line.source === current_node || line.target === current_node) {
-                if (line.source === current_node) {
-                    $("#" + line.target.id).attr("fill", selected_node);
-                } else {
-                    $("#" + line.source.id).attr("fill", selected_node);
-                }
-                return selected_link;
-
-            } else { return unselected_link }
-        }
-
-
-        function set_title(d) {
-            return d.name;
-        }
-
-        function set_height(d) {
-            return state_height;
-        }
-
-        function set_width(d) {
-            d.width = Math.max(d.name.length * 7.2 + 30, 100);
-            return d.width;
-        }
-
-        function set_dot_width(d) {
-            return set_width(d) + 7;
-        }
-
-
-        //Function to choose the line colour and thickness 
-        //If the link type is "A" return green 
-        //If the link type is "E" return red 
-        function linkColour(d) {
-            return unselected_link;
-        }
-
-        //Drag functions 
-        //d is the node 
-        function drag_start(d) {
-            if (!d3.event.active) simulation.alphaTarget(0.3).restart();
-            d.fx = d.x;
-            d.fy = d.y;
-        }
-
-        //make sure you can't drag the circle outside the box
-        function drag_drag(d) {
-            d.fx = d3.event.x;
-            d.fy = d3.event.y;
-        }
-
-        function drag_end(d) {
-            if (!d3.event.active) simulation.alphaTarget(0);
-            d.fx = null;
-            d.fy = null;
-        }
-
-        //Zoom functions 
-        function zoom_actions() {
-            g.attr("transform", d3.event.transform)
-        }
-
-
-
-        function tickActions() {
-            //update circle positions each tick of the simulation 
-            if (simulation !== null) {
-                states
-                    .attr("x", function(d) { return d.x - d.width / 2; })
-                    .attr("y", function(d) { return d.y - half_height; });
-
-                links
-                    .attr("x1", function(d) { if (d.source.x > d.target.x) { return d.source.x - d.source.width / 2 - 7; } else { return d.source.x + d.source.width / 2 + 7; } })
-                    .attr("y1", function(d) { return d.source.y; })
-                    .attr("x2", function(d) { if (d.source.x > d.target.x) { return d.target.x + d.target.width / 2 + 7; } else { return d.target.x - d.target.width / 2 - 7; } })
-                    .attr("y2", function(d) { return d.target.y; });
-
-            }
-        }
-        </script>
-    </p>
+    }
+</script>
+</p>
 </body>
 </meta>
