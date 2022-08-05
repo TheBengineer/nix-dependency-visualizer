@@ -94,7 +94,7 @@
     var center_force = null;
 
     var selected_node = "coral";
-    var unselected_node = "aqua";
+    var unselected_node = "#99E5FF";
 
 
     var selected_link = "chocolate";
@@ -280,7 +280,6 @@
                 current_node = d;
                 var rect_selector = ("#" + d.id + " rect");
                 $(rect_selector).attr("fill", selected_node);
-                console.log($(rect_selector), $(rect_selector).attr("fill"))
                 g.selectAll("line").style("stroke", highlight_lines);
 
             })
