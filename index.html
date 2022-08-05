@@ -104,10 +104,19 @@
         parse();
     });
 
+    function fix_nix_id(id) {
+        var parsed_id = /(?<=\/)[^/\.]+(?=\.[^/]*$)/.exec(id)
+        if (parsed_id != null) {
+            return parsed_id[0];
+        } else {
+            return /[^/]*$/.exec(id)[0];
+        }
+    }
+
     function parse_child(child) {
 
         if (child.type === "edge_stmt") {
-            var link_obj = {"source": child.edge_list[0].id, "target": child.edge_list[1].id}
+            var link_obj = {"source": fix_nix_id(child.edge_list[0].id), "target": fix_nix_id(child.edge_list[1].id)}
 
             child.attr_list.forEach(function (attr) {
                 link_obj[attr.id] = attr.eq;
@@ -115,7 +124,7 @@
             links_data.push(link_obj);
         }
         if (child.type === "node_stmt") {
-            var node_object = {"id": child.node_id.id, "type": "dependency", "name": child.node_id.id};
+            var node_object = {"id": fix_nix_id(child.node_id.id), "type": "dependency", "name": child.node_id.id};
             child.attr_list.forEach(function (attr) {
                 node_object[attr.id] = attr.eq;
             });
@@ -265,12 +274,13 @@
                 tooltip.transition()
                     .duration(10)
                     .style("opacity", .9);
-                tooltip.html("<b>ID</b></br>" + d.id)
+                tooltip.html("<b>ID</b></br>" + d.name)
                     .style("left", (d3.event.pageX) + "px")
                     .style("top", (d3.event.pageY - 28) + "px");
                 current_node = d;
-                rect_selector = ("#" + d.id + " rect").replace(":", "\\:");
+                var rect_selector = ("#" + d.id + " rect");
                 $(rect_selector).attr("fill", selected_node);
+                console.log($(rect_selector), $(rect_selector).attr("fill"))
                 g.selectAll("line").style("stroke", highlight_lines);
 
             })
