@@ -100,16 +100,14 @@
     var selected_link = "chocolate";
     var unselected_link = "green";
 
+    $("#jsoninput").load("data/default.json", function () {
+        parse();
+    });
+
     function parse_child(child) {
 
         if (child.type === "edge_stmt") {
             links_data.push({"source": child.edge_list[0].id, "target": child.edge_list[1].id});
-            child.edge_list.forEach(function (node) {
-                var node_object = {"id": node.id, "type": "state"};
-                // if ((nodes_data.some(e => e.id === node_object.id)) === false) {
-                //     nodes_data.push(node_object);
-                // }
-            })
         }
         if (child.type === "node_stmt") {
             var node_object = {"id": child.node_id.id, "type": "dependency", "name": child.node_id.id};
