@@ -189,7 +189,7 @@
                         process_layer(graph, e.edge_list[0].id, next_level);
                     } else {
                         if (e.edge_list[0].depth < next_level) {
-                            console.log("Error: ", e.edge_list[0], " has a higher depth than ", next_level);
+                            //console.log("Error: ", e.edge_list[0], " has a higher depth than ", next_level);
                             e.edge_list[0].depth = next_level;
                             //e.edge_list[1].depth = level;
                             process_layer(graph, e.edge_list[0].id, next_level);
