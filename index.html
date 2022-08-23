@@ -22,9 +22,13 @@
 
 <div class="tooltip">
 </div>
+
+<div class="selected">
+</div>
 <div>
     <div><span>Nix dependency GraphVis</span></div>
-    <div><span>Generate with: <span style="background:black; color:white; padding-left:20px;">$ nix-store -q --graph /nix/store/{root package}</span></span></div>
+    <div><span>Generate graph for all dependencies with: <span style="background:black; color:white; padding-left:20px;">$ nix-store -q --find-file /nix/store/* > graph.dot</span></span></div>
+    <div><span>Or for specific dependency with: <span style="background:black; color:white; padding-left:20px;">$ nix-store -q --graph /nix/store/{root package} > graph.dot</span></span></div>
     <textarea cols="50" id="jsoninput" rows="20">digraph  G {a -> b; a -> x; a -> C; C -> d}</textarea>
 </div>
 <div>
@@ -49,6 +53,20 @@
 <script src="data/dotparser.js"></script>
 <style>
     div.tooltip {
+        position: absolute;
+        text-align: center;
+        width: 200px;
+        height: auto;
+        padding: 2px;
+        font: 10px sans-serif;
+        background: lightsteelblue;
+        border: 0px;
+        border-radius: 8px;
+        pointer-events: none;
+    }
+
+
+    div.selected {
         position: absolute;
         text-align: center;
         width: 200px;
@@ -100,6 +118,8 @@
     var selected_link = "chocolate";
     var unselected_link = "green";
 
+    var xScale = d3.scaleLinear().domain([0, 1]).range([0, 600]);
+
     $("#jsoninput").load("data/default.json", function () {
         parse();
     });
@@ -118,7 +138,6 @@
     }
 
     function parse_child(child) {
-
         if (child.type === "edge_stmt") {
             let link_obj = {"source": fix_nix_id(child.edge_list[0].id), "target": fix_nix_id(child.edge_list[1].id)}
 
@@ -129,7 +148,7 @@
             child.edge_list.forEach(function (node) {
                 const fixed_id = fix_nix_id(node.id);
                 if ((nodes_data.some(e => e.id === fixed_id)) === false) {
-                    nodes_data.push({"id": fixed_id, "type": "dependency", "name": node.id, "label": nix_id_to_label(node.id)});
+                    nodes_data.push({"id": fixed_id, "type": "dependency", "name": node.id, "label": nix_id_to_label(node.id), "depth": node.depth});
                 }
             });
 
@@ -138,7 +157,7 @@
 
             const fixed_id = fix_nix_id(child.node_id.id);
             if ((nodes_data.some(e => e.id === fixed_id)) === false) {
-                nodes_data.push({"id": fixed_id, "type": "dependency", "name": child.node_id.id, "label": nix_id_to_label(child.node_id.id)});
+                nodes_data.push({"id": fixed_id, "type": "dependency", "name": child.node_id.id, "label": nix_id_to_label(child.node_id.id), "depth": 0});
             }
             const index = nodes_data.map(function (x) {
                 return x.id;
@@ -150,10 +169,33 @@
         }
     }
 
+    function walk_graph(graph) {
+        graph.children.forEach(function (child) {
+            if (child.type === "node_stmt") {
+                child.depth = 0;
+                process_layer(graph, child.node_id.id, 0);
+            }
+        });
+    }
+
+    function process_layer(graph, child_id, level) {
+        var next_level = level + 1;
+        graph.children.filter(function (e) {
+            if (e.type === "edge_stmt") {
+                if (e.edge_list[1].id === child_id) {
+                    if (e.edge_list[0].depth === undefined) {
+                        e.edge_list[0].depth = next_level;
+                        e.edge_list[1].depth = level;
+                        process_layer(graph, e.edge_list[0].id, next_level);
+                    }
+                }
+            }
+        });
+    }
 
     function parse() {
         parsed_graph = DotParser.parse(document.querySelector('#jsoninput').value);
-
+        walk_graph(parsed_graph);
         var statusField = document.getElementById("status");
         statusField.textContent = "Success";
         nodes_data = [];
@@ -325,6 +367,10 @@
         //     .call(zoom.transform, d3.zoomIdentity.translate(100, 50).scale(.5))
         //     .call(zoom.on('zoom', (event) => { svg.attr('transform', event.transform); }));
         //add zoom capabilities
+
+        simulation.force('x', d3.forceX().x(function (d) {
+            return xScale(d.depth * 2);
+        }));
 
         var zoom_handler = d3.zoom()
             .on("zoom", zoom_actions);
