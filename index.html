@@ -235,7 +235,6 @@
 
         simulation
             .force("charge_force", charge_force)
-            .force("center_force", center_force)
             .force("links", link_force);
 
 
@@ -369,8 +368,9 @@
         //add zoom capabilities
 
         simulation.force('x', d3.forceX().x(function (d) {
-            return xScale(d.depth * 2);
-        }));
+            return xScale(d.depth * 3);
+        }))
+            .force('y', d3.forceY().strength(.001));
 
         var zoom_handler = d3.zoom()
             .on("zoom", zoom_actions);
